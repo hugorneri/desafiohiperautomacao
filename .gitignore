@@ -1,6 +1,6 @@
 docs
 .docs
-
+.venv
 
 logs/
 __pycache__/

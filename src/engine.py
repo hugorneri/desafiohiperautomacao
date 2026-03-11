@@ -23,8 +23,20 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 try:
     from .map import TIMEOUT, URL, XPATHS_BENEFICIOS, XPATHS_BUSCA, XPATHS_CHECKBOX, XPATHS_RESULTADO
+    from .google_drive import (
+        GoogleDriveConfigError,
+        GoogleDriveUploadError,
+        enviar_resultado_para_google_drive,
+        google_drive_esta_configurado,
+    )
 except ImportError:
     from map import TIMEOUT, URL, XPATHS_BENEFICIOS, XPATHS_BUSCA, XPATHS_CHECKBOX, XPATHS_RESULTADO
+    from google_drive import (
+        GoogleDriveConfigError,
+        GoogleDriveUploadError,
+        enviar_resultado_para_google_drive,
+        google_drive_esta_configurado,
+    )
 
 
 ARGUMENTOS_CHECKBOX = {
@@ -341,6 +353,31 @@ def registrar_resultado_execucao(resultado):
             ensure_ascii=False,
         ),
     )
+
+
+def registrar_aviso_armazenamento(resultado, mensagem):
+    mensagem_atual = resultado.get("mensagem")
+    if mensagem_atual:
+        resultado["mensagem"] = f"{mensagem_atual} | {mensagem}"
+    else:
+        resultado["mensagem"] = mensagem
+    return resultado
+
+
+def enviar_resultado_google_se_configurado(resultado):
+    if not resultado.get("sucesso"):
+        return resultado
+
+    if not google_drive_esta_configurado():
+        return registrar_aviso_armazenamento(
+            resultado,
+            "Armazenamento Google ignorado: configure o arquivo .env e um credentials.json valido para habilitar Drive e Sheets.",
+        )
+
+    try:
+        return enviar_resultado_para_google_drive(resultado)
+    except (GoogleDriveConfigError, GoogleDriveUploadError) as exc:
+        return registrar_aviso_armazenamento(resultado, str(exc))
 
 
 def preencher_formulario_busca(navegador, termo, filtros_checkbox=None):
@@ -848,6 +885,11 @@ def parse_args():
         action="store_true",
         help="Executa o navegador com interface visual",
     )
+    parser.add_argument(
+        "--upload-google",
+        action="store_true",
+        help="Envia o resultado JSON para Google Drive e Google Sheets quando configurados no .env",
+    )
     return parser.parse_args()
 
 
@@ -881,6 +923,8 @@ def main():
     args = parse_args()
     payload = montar_payload_automacao(args)
     resultado = executar_automacao_por_payload(payload)
+    if args.upload_google:
+        resultado = enviar_resultado_google_se_configurado(resultado)
     print(json.dumps(resultado, ensure_ascii=False, indent=2))
 
 
