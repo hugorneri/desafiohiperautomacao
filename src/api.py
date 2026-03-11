@@ -8,6 +8,7 @@ try:
         GoogleDriveConfigError,
         GoogleDriveUploadError,
         enviar_resultado_para_google_drive,
+        google_drive_esta_configurado,
     )
     from .schemas import ConsultaRequest, ConsultaResponse
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
         GoogleDriveConfigError,
         GoogleDriveUploadError,
         enviar_resultado_para_google_drive,
+        google_drive_esta_configurado,
     )
     from schemas import ConsultaRequest, ConsultaResponse
 
@@ -43,13 +45,12 @@ def healthcheck():
     return {"status": "ok"}
 
 
-def registrar_falha_armazenamento(resultado, mensagem):
+def registrar_aviso_armazenamento(resultado, mensagem):
     mensagem_atual = resultado.get("mensagem")
     if mensagem_atual:
         resultado["mensagem"] = f"{mensagem_atual} | {mensagem}"
     else:
         resultado["mensagem"] = mensagem
-    resultado["sucesso"] = False
     return resultado
 
 
@@ -67,10 +68,16 @@ def criar_consulta(payload: ConsultaRequest):
     if not resultado.get("sucesso"):
         return resultado
 
+    if not google_drive_esta_configurado():
+        return registrar_aviso_armazenamento(
+            resultado,
+            "Armazenamento Google ignorado: configure o arquivo .env e um credentials.json valido para habilitar Drive e Sheets.",
+        )
+
     try:
         resultado = enviar_resultado_para_google_drive(resultado)
     except (GoogleDriveConfigError, GoogleDriveUploadError) as exc:
-        resultado = registrar_falha_armazenamento(resultado, str(exc))
+        resultado = registrar_aviso_armazenamento(resultado, str(exc))
         return resultado
 
     return resultado
